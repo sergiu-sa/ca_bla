@@ -1,4 +1,4 @@
-import { get, post, put, del } from '../api/client';
+import { get, post, put, del } from "../api/client";
 
 export interface Comment {
   id: string;
@@ -37,28 +37,19 @@ export interface CommentsResponse {
 
 /**
  * Get comments for a specific post
- * @param postId The ID of the post
- * @param page Page number (default: 1)
- * @param limit Number of comments per page (default: 12)
- * @returns Promise<CommentsResponse>
  */
 export async function getPostComments(
   postId: string,
   page: number = 1,
   limit: number = 12
 ): Promise<CommentsResponse> {
-  const response = await get<CommentsResponse>(
+  return get<CommentsResponse>(
     `/social/posts/${postId}/comments?page=${page}&limit=${limit}&_author=true`
   );
-  return response;
 }
 
 /**
  * Create a new comment on a post
- * @param postId The ID of the post
- * @param body The comment text
- * @param replyToId Optional ID of comment to reply to
- * @returns Promise<{data: Comment}>
  */
 export async function createComment(
   postId: string,
@@ -70,18 +61,12 @@ export async function createComment(
     commentData.replyToId = replyToId;
   }
 
-  const response = await post<{ data: Comment }>(
-    `/social/posts/${postId}/comment`,
-    commentData
-  );
-  return response;
+  const response = await post(`/social/posts/${postId}/comment`, commentData);
+  return response as any as { data: Comment };
 }
 
 /**
  * React to a post with an emoji
- * @param postId The ID of the post
- * @param symbol The reaction emoji symbol
- * @returns Promise<void>
  */
 export async function reactToPost(
   postId: string,
@@ -92,9 +77,6 @@ export async function reactToPost(
 
 /**
  * Remove reaction from a post
- * @param postId The ID of the post
- * @param symbol The reaction emoji symbol
- * @returns Promise<void>
  */
 export async function removeReaction(
   postId: string,
@@ -105,20 +87,16 @@ export async function removeReaction(
 
 /**
  * Toggle reaction on a post (add if not exists, remove if exists)
- * @param postId The ID of the post
- * @param symbol The reaction emoji symbol
- * @returns Promise<boolean> True if added, false if removed
  */
 export async function toggleReaction(
   postId: string,
   symbol: string
 ): Promise<boolean> {
   try {
-    // Try to add reaction first
     await reactToPost(postId, symbol);
     return true;
   } catch (error: any) {
-    // If reaction already exists, remove it
+    // If already reacted, remove it instead
     if (error.response?.status === 400 || error.response?.status === 409) {
       await removeReaction(postId, symbol);
       return false;
@@ -129,9 +107,6 @@ export async function toggleReaction(
 
 /**
  * Delete a comment (only works for your own comments)
- * @param postId The ID of the post
- * @param commentId The ID of the comment
- * @returns Promise<void>
  */
 export async function deleteComment(
   postId: string,
@@ -141,9 +116,7 @@ export async function deleteComment(
 }
 
 /**
- * Get time ago text for a date
- * @param date The date to format
- * @returns String representation of time ago
+ * Utility: Get time ago text for a date
  */
 export function getTimeAgo(date: Date): string {
   const now = new Date();
@@ -153,19 +126,14 @@ export function getTimeAgo(date: Date): string {
   const diffInHours = Math.floor(diffInMinutes / 60);
   const diffInDays = Math.floor(diffInHours / 24);
 
-  if (diffInSeconds < 60) {
-    return 'now';
-  } else if (diffInMinutes < 60) {
-    return `${diffInMinutes}m`;
-  } else if (diffInHours < 24) {
-    return `${diffInHours}h`;
-  } else if (diffInDays < 7) {
-    return `${diffInDays}d`;
-  } else {
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: diffInDays > 365 ? 'numeric' : undefined,
-    });
-  }
+  if (diffInSeconds < 60) return "now";
+  if (diffInMinutes < 60) return `${diffInMinutes}m`;
+  if (diffInHours < 24) return `${diffInHours}h`;
+  if (diffInDays < 7) return `${diffInDays}d`;
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: diffInDays > 365 ? "numeric" : undefined,
+  });
 }
