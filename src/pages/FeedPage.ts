@@ -99,38 +99,57 @@ export default async function FeedPage(): Promise<string> {
           </header>
 
           <!-- Create Post Form (only logged-in users) -->
-          ${
-            isUserLoggedIn
-              ? `
-          <section class="create-post-box">
-            <h2>Create a Post</h2>
-            <form id="create-post-form" class="create-post-form">
-              <div class="form-group">
-                <label for="post-title">Title</label>
-                <input type="text" id="post-title" name="title" placeholder="Enter a title" required />
-              </div>
-              <div class="form-group">
-                <label for="post-body">Body</label>
-                <textarea id="post-body" name="body" rows="3" placeholder="What's on your mind?" required></textarea>
-              </div>
-              <div class="form-group">
-                <label for="post-tags">Tags (comma separated)</label>
-                <input type="text" id="post-tags" name="tags" placeholder="e.g. nature, coding, life" />
-              </div>
-              <div class="form-group">
-                <label for="post-image-url">Image URL</label>
-                <input type="url" id="post-image-url" name="imageUrl" placeholder="https://picsum.photos/600/400" />
-              </div>
-              <div class="form-group">
-                <label for="post-image-alt">Image Alt Text</label>
-                <input type="text" id="post-image-alt" name="imageAlt" placeholder="Describe the image" />
-              </div>
-              <button type="submit" class="btn btn-primary">Post</button>
-            </form>
-          </section>
-          `
-              : ""
-          }
+${
+  isUserLoggedIn
+    ? `
+<section class="create-post-box collapsed" id="create-post-box">
+  <form id="create-post-form" class="create-post-form">
+    
+    <!-- Collapsed View -->
+    <div class="collapsed-view">
+      <input 
+        type="text" 
+        id="collapsed-input" 
+        placeholder="What's on your mind?" 
+        readonly 
+      />
+    </div>
+
+    <!-- Expanded View (hidden until clicked) -->
+    <div class="expanded-fields" style="display: none;">
+      <h2>Create a Post</h2>
+      <div class="form-group">
+        <label for="post-title">Title</label>
+        <input type="text" id="post-title" name="title" placeholder="Enter a title" required />
+      </div>
+      <div class="form-group">
+        <label for="post-body">Body</label>
+        <textarea id="post-body" name="body" rows="3" placeholder="What's on your mind?" required></textarea>
+      </div>
+      <div class="form-group">
+        <label for="post-tags">Tags (comma separated)</label>
+        <input type="text" id="post-tags" name="tags" placeholder="e.g. nature, coding, life" />
+      </div>
+      <div class="form-group">
+        <label for="post-image-url">Image URL</label>
+        <input type="url" id="post-image-url" name="imageUrl" placeholder="https://example.com/image.jpg" />
+      </div>
+      <div class="form-group">
+        <label for="post-image-alt">Image Alt Text</label>
+        <input type="text" id="post-image-alt" name="imageAlt" placeholder="Describe the image" />
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Post</button>
+        <button type="button" id="cancel-post-btn" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </form>
+</section>
+`
+    : ""
+}
+
 
           <!-- Posts Container -->
           <div class="posts-container" id="posts-container">
@@ -215,6 +234,30 @@ function initializeFeedInteractions(): void {
   ) as HTMLFormElement | null;
   if (createForm) {
     createForm.addEventListener("submit", handleCreatePost);
+  }
+
+  // Collapsible create post box
+  const postBox = document.getElementById("create-post-box");
+  const collapsedInput = document.getElementById("collapsed-input");
+  const expandedFields = postBox?.querySelector(
+    ".expanded-fields"
+  ) as HTMLElement;
+  const cancelBtn = document.getElementById("cancel-post-btn");
+
+  if (postBox && collapsedInput && expandedFields) {
+    collapsedInput.addEventListener("click", () => {
+      postBox.classList.remove("collapsed");
+      postBox.classList.add("expanded");
+      expandedFields.style.display = "block";
+      collapsedInput.style.display = "none";
+    });
+
+    cancelBtn?.addEventListener("click", () => {
+      postBox.classList.remove("expanded");
+      postBox.classList.add("collapsed");
+      expandedFields.style.display = "none";
+      collapsedInput.style.display = "block";
+    });
   }
 
   // Handle like/reaction buttons
