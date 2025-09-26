@@ -1,6 +1,6 @@
 /**
- * @file FeedPage.ts
- * @description Feed page: shows posts and allows full CRUD (create, edit, delete) for logged-in users.
+ * Enhanced FeedPage with full CRUD, Comments, and Reactions functionality
+ * @file Enhanced FeedPage.ts
  */
 
 import postCard from "../components/postCard";
@@ -16,6 +16,7 @@ import {
   getPostComments,
   createComment,
   toggleReaction,
+  type Comment,
 } from "../services/interactions/interactions";
 import { renderRoute } from "../router";
 import { isLoggedIn } from "../utils/auth";
@@ -150,7 +151,6 @@ ${
     : ""
 }
 
-
           <!-- Posts Container -->
           <div class="posts-container" id="posts-container">
             ${
@@ -180,6 +180,55 @@ ${
           <!-- Pagination Controls (only show when not in search mode) -->
           ${!isSearchMode ? renderPaginationControls(postsResponse.meta) : ""}
         </main>
+      </div>
+
+      <!-- Edit Post Modal -->
+      <div class="modal" id="editPostModal" style="display: none;">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>✏️ Edit Your Post</h3>
+            <button class="modal-close" onclick="closeEditModal()">×</button>
+          </div>
+          <form id="editPostForm">
+            <div class="form-group">
+              <label for="editPostTitle">Title</label>
+              <input type="text" id="editPostTitle" class="form-control" required />
+            </div>
+            <div class="form-group">
+              <label for="editPostBody">Body</label>
+              <textarea id="editPostBody" class="form-control" rows="6" required></textarea>
+            </div>
+            <div class="form-group">
+              <label for="editPostTags">Tags (comma separated)</label>
+              <input type="text" id="editPostTags" class="form-control" />
+            </div>
+            <div class="form-group">
+              <label for="editPostImageUrl">Image URL</label>
+              <input type="url" id="editPostImageUrl" class="form-control" />
+            </div>
+            <div class="form-group">
+              <label for="editPostImageAlt">Image Alt Text</label>
+              <input type="text" id="editPostImageAlt" class="form-control" />
+            </div>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+              <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+              <button type="submit" class="btn btn-primary">💾 Update Post</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Full Post View Modal -->
+      <div class="modal" id="fullPostModal" style="display: none;">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>📄 Full Post</h3>
+            <button class="modal-close" onclick="closeFullPostModal()">×</button>
+          </div>
+          <div id="fullPostContent">
+            <!-- Full post content will be loaded here -->
+          </div>
+        </div>
       </div>
     `;
   } catch (error) {
@@ -257,91 +306,30 @@ function initializeFeedInteractions(): void {
       postBox.classList.add("collapsed");
       expandedFields.style.display = "none";
       collapsedInput.style.display = "block";
+      // Reset form
+      createForm?.reset();
     });
   }
 
-  // Handle like/reaction buttons
-  const likeButtons = document.querySelectorAll(
-    ".like-btn, .action-btn-compact.like-btn"
-  );
-  likeButtons.forEach((button) =>
-    button.addEventListener("click", handleLikeClick)
-  );
+  // Handle edit post form
+  const editForm = document.getElementById(
+    "editPostForm"
+  ) as HTMLFormElement | null;
+  if (editForm) {
+    editForm.addEventListener("submit", handleEditPost);
+  }
 
-  // Handle comment buttons - toggle visibility
-  const commentButtons = document.querySelectorAll(
-    ".comment-btn, .action-btn-compact.comment-btn"
-  );
-  commentButtons.forEach((button) =>
-    button.addEventListener("click", handleCommentToggle)
-  );
-
-  // Handle view buttons - show full post
-  const viewButtons = document.querySelectorAll(
-    ".view-btn, .action-btn-compact.view-btn"
-  );
-  viewButtons.forEach((button) =>
-    button.addEventListener("click", handleViewPost)
-  );
-
-  // Handle comment form submissions
-  const commentSubmitButtons = document.querySelectorAll(".comment-submit-btn");
-  commentSubmitButtons.forEach((button) =>
-    button.addEventListener("click", handleCommentSubmit)
-  );
-
-  // Handle comment input enter key
-  const commentInputs = document.querySelectorAll(".comment-input");
-  commentInputs.forEach((input) => {
-    input.addEventListener("keypress", (event: Event) => {
-      const keyEvent = event as KeyboardEvent;
-      if (keyEvent.key === "Enter") {
-        const postId = (input as HTMLInputElement).id.replace(
-          "comment-input-",
-          ""
-        );
-        const submitBtn = document.querySelector(
-          `[data-post-id="${postId}"].comment-submit-btn`
-        ) as HTMLElement;
-        if (submitBtn) {
-          handleCommentSubmit({ currentTarget: submitBtn } as unknown as Event);
-        }
-      }
-    });
-  });
-
-  // Handle reaction buttons
-  const reactionButtons = document.querySelectorAll(".reaction-btn");
-  reactionButtons.forEach((button) =>
-    button.addEventListener("click", handleReactionClick)
-  );
-
-  // Handle like button hover for reactions modal
-  likeButtons.forEach((button) => {
-    let hoverTimeout: number;
-    button.addEventListener("mouseenter", () => {
-      hoverTimeout = window.setTimeout(
-        () => showReactionsModal(button as HTMLElement),
-        800
-      );
-    });
-    button.addEventListener("mouseleave", () => {
-      clearTimeout(hoverTimeout);
-      hideReactionsModal(button as HTMLElement);
-    });
-  });
-
-  // Handle delete buttons
-  document
-    .querySelectorAll(".delete-post-btn")
-    .forEach((btn) => btn.addEventListener("click", handleDeletePost));
-
-  // Handle edit buttons
-  document
-    .querySelectorAll(".edit-post-btn")
-    .forEach((btn) => btn.addEventListener("click", handleEditPost));
-
-  // (Removed any "load more" legacy handlers)
+  // Make functions globally available
+  (window as any).togglePostMenu = togglePostMenu;
+  (window as any).editPost = editPostFunction;
+  (window as any).deletePost = deletePostFunction;
+  (window as any).toggleComments = toggleComments;
+  (window as any).submitComment = submitComment;
+  (window as any).toggleReaction = handleToggleReaction;
+  (window as any).selectReaction = selectReaction;
+  (window as any).viewFullPost = viewFullPost;
+  (window as any).closeEditModal = closeEditModal;
+  (window as any).closeFullPostModal = closeFullPostModal;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -352,7 +340,6 @@ async function handleCreatePost(event: Event): Promise<void> {
   event.preventDefault();
 
   const form = event.target as HTMLFormElement;
-
   const title = (
     document.getElementById("post-title") as HTMLInputElement
   )?.value.trim();
@@ -368,7 +355,6 @@ async function handleCreatePost(event: Event): Promise<void> {
         .map((t) => t.trim())
         .filter((t) => t.length > 0)
     : [];
-
   const imageUrl = (
     document.getElementById("post-image-url") as HTMLInputElement
   )?.value.trim();
@@ -392,8 +378,6 @@ async function handleCreatePost(event: Event): Promise<void> {
     if (imageUrl) payload.media = { url: imageUrl, alt: imageAlt || "image" };
 
     const created = await createPost(payload);
-
-    // Safety-normalize in UI as well (defensive)
     const safePost: NoroffPost = {
       ...created,
       tags: created.tags || [],
@@ -410,9 +394,25 @@ async function handleCreatePost(event: Event): Promise<void> {
       if (el) postsContainer.insertBefore(el, postsContainer.firstChild);
     }
 
+    // Reset and collapse form
     form.reset();
+    const postBox = document.getElementById("create-post-box");
+    const collapsedInput = document.getElementById("collapsed-input");
+    const expandedFields = postBox?.querySelector(
+      ".expanded-fields"
+    ) as HTMLElement;
+
+    if (postBox && collapsedInput && expandedFields) {
+      postBox.classList.remove("expanded");
+      postBox.classList.add("collapsed");
+      expandedFields.style.display = "none";
+      collapsedInput.style.display = "block";
+    }
+
     submitBtn.disabled = false;
     submitBtn.textContent = "Post";
+
+    showNotification("✅ Post created successfully!", "success");
   } catch (err: any) {
     console.error("Error creating post:", err);
     alert(err?.message || "Failed to create post. Please try again.");
@@ -427,202 +427,507 @@ async function handleCreatePost(event: Event): Promise<void> {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                           Post Delete / Edit                                */
+/*                           Post Edit / Delete                               */
 /* -------------------------------------------------------------------------- */
 
-async function handleDeletePost(e: Event) {
-  const btn = e.currentTarget as HTMLElement;
-  const postId = btn.dataset.postId;
-  if (!postId) return;
+function togglePostMenu(postId: number): void {
+  // Close all other menus first
+  document.querySelectorAll(".post-menu").forEach((menu) => {
+    if (menu.id !== `postMenu${postId}`) {
+      menu.classList.remove("show");
+    }
+  });
 
-  if (!confirm("Are you sure you want to delete this post?")) return;
-
-  try {
-    await deletePost(Number(postId));
-    const postEl = document.getElementById(`post-${postId}`);
-    if (postEl) postEl.remove();
-  } catch (error) {
-    console.error("Error deleting post:", error);
-    alert("Failed to delete post.");
+  const menu = document.getElementById(`postMenu${postId}`);
+  if (menu) {
+    menu.classList.toggle("show");
   }
 }
 
-async function handleEditPost(e: Event) {
-  const btn = e.currentTarget as HTMLElement;
-  const postId = btn.dataset.postId;
+function editPostFunction(postId: number): void {
+  const postElement = document.getElementById(`post-${postId}`);
+  if (!postElement) return;
+
+  const title =
+    postElement.querySelector(".post-title-compact")?.textContent || "";
+  const body = postElement.querySelector(".post-body")?.textContent || "";
+  const tags = Array.from(postElement.querySelectorAll(".tag-compact"))
+    .map((tag) => tag.textContent?.replace("#", "") || "")
+    .filter((tag) => tag.length > 0);
+
+  // Find media info if exists
+  const mediaImg = postElement.querySelector(
+    ".post-image-preview"
+  ) as HTMLImageElement;
+  const imageUrl = mediaImg?.src || "";
+  const imageAlt = mediaImg?.alt || "";
+
+  // Populate edit form
+  (document.getElementById("editPostTitle") as HTMLInputElement).value = title;
+  (document.getElementById("editPostBody") as HTMLTextAreaElement).value = body;
+  (document.getElementById("editPostTags") as HTMLInputElement).value =
+    tags.join(", ");
+  (document.getElementById("editPostImageUrl") as HTMLInputElement).value =
+    imageUrl;
+  (document.getElementById("editPostImageAlt") as HTMLInputElement).value =
+    imageAlt;
+
+  // Store post ID for form submission
+  const editModal = document.getElementById("editPostModal");
+  if (editModal) {
+    editModal.dataset.postId = postId.toString();
+    editModal.style.display = "flex";
+  }
+
+  // Close post menu
+  togglePostMenu(postId);
+}
+
+async function handleEditPost(event: Event): Promise<void> {
+  event.preventDefault();
+
+  const modal = document.getElementById("editPostModal");
+  const postId = Number(modal?.dataset.postId);
   if (!postId) return;
 
-  const postEl = document.getElementById(`post-${postId}`);
-  if (!postEl) return;
+  const title = (
+    document.getElementById("editPostTitle") as HTMLInputElement
+  ).value.trim();
+  const body = (
+    document.getElementById("editPostBody") as HTMLTextAreaElement
+  ).value.trim();
+  const rawTags = (
+    document.getElementById("editPostTags") as HTMLInputElement
+  ).value.trim();
+  const tags = rawTags
+    ? rawTags
+        .split(",")
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0)
+    : [];
+  const imageUrl = (
+    document.getElementById("editPostImageUrl") as HTMLInputElement
+  ).value.trim();
+  const imageAlt = (
+    document.getElementById("editPostImageAlt") as HTMLInputElement
+  ).value.trim();
 
-  const newTitle = prompt(
-    "Edit title:",
-    postEl.querySelector(".post-title")?.textContent || ""
-  );
-  const newBody = prompt(
-    "Edit body:",
-    postEl.querySelector(".post-body")?.textContent || ""
-  );
-  if (!newTitle || !newBody) return;
+  if (!title || !body) {
+    alert("Title and Body are required.");
+    return;
+  }
 
   try {
-    const updated = await updatePost(Number(postId), {
-      title: newTitle,
-      body: newBody,
-    });
+    const submitBtn = modal?.querySelector(
+      'button[type="submit"]'
+    ) as HTMLButtonElement;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Updating...";
 
-    const titleEl = postEl.querySelector(".post-title");
-    const bodyEl = postEl.querySelector(".post-body");
-    if (titleEl) titleEl.textContent = updated.title;
-    if (bodyEl) bodyEl.textContent = updated.body;
+    const payload: any = { title, body, tags };
+    if (imageUrl) payload.media = { url: imageUrl, alt: imageAlt || "image" };
+
+    const updated = await updatePost(postId, payload);
+
+    // Update the post in the UI
+    const postElement = document.getElementById(`post-${postId}`);
+    if (postElement) {
+      // Update title and body
+      const titleEl = postElement.querySelector(".post-title-compact");
+      const bodyEl = postElement.querySelector(".post-body");
+      if (titleEl) titleEl.textContent = updated.title;
+      if (bodyEl) bodyEl.textContent = updated.body;
+
+      // Update tags
+      const tagsContainer = postElement.querySelector(".post-tags-compact");
+      if (tagsContainer && updated.tags) {
+        tagsContainer.innerHTML =
+          updated.tags
+            .slice(0, 2)
+            .map((tag) => `<span class="tag-compact">#${tag}</span>`)
+            .join("") +
+          (updated.tags.length > 2
+            ? `<span class="tag-more">+${updated.tags.length - 2}</span>`
+            : "");
+      }
+
+      // Update media if changed
+      if (updated.media?.url) {
+        let mediaContainer = postElement.querySelector(".post-media-preview");
+        if (!mediaContainer) {
+          mediaContainer = document.createElement("div");
+          mediaContainer.className = "post-media-preview";
+          postElement.insertBefore(mediaContainer, postElement.firstChild);
+        }
+        mediaContainer.innerHTML = `<img src="${updated.media.url}" alt="${updated.media.alt || "Post image"}" class="post-image-preview">`;
+      }
+    }
+
+    closeEditModal();
+    showNotification("✅ Post updated successfully!", "success");
+
+    submitBtn.disabled = false;
+    submitBtn.textContent = "💾 Update Post";
   } catch (error) {
     console.error("Error updating post:", error);
-    alert("Failed to update post.");
+    alert("Failed to update post. Please try again.");
+
+    const submitBtn = modal?.querySelector(
+      'button[type="submit"]'
+    ) as HTMLButtonElement;
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "💾 Update Post";
+    }
+  }
+}
+
+async function deletePostFunction(postId: number): Promise<void> {
+  if (
+    !confirm(
+      "Are you sure you want to delete this post? This action cannot be undone."
+    )
+  ) {
+    togglePostMenu(postId);
+    return;
+  }
+
+  try {
+    await deletePost(postId);
+    const postElement = document.getElementById(`post-${postId}`);
+    if (postElement) {
+      postElement.style.opacity = "0";
+      postElement.style.transform = "translateY(-20px)";
+      setTimeout(() => postElement.remove(), 300);
+    }
+
+    showNotification("✅ Post deleted successfully!", "success");
+  } catch (error) {
+    console.error("Error deleting post:", error);
+    alert("Failed to delete post. Please try again.");
+  }
+
+  togglePostMenu(postId);
+}
+
+function closeEditModal(): void {
+  const modal = document.getElementById("editPostModal");
+  if (modal) {
+    modal.style.display = "none";
+    delete modal.dataset.postId;
   }
 }
 
 /* -------------------------------------------------------------------------- */
-/*                     Existing comment & reaction handlers                    */
+/*                           Comments Functionality                           */
 /* -------------------------------------------------------------------------- */
 
-function handleLikeClick(event: Event): void {
-  const button = event.currentTarget as HTMLElement;
-  const postId = button.dataset.postId;
-  button.classList.toggle("liked");
-  console.log("Liked post:", postId);
-}
-
-async function handleCommentToggle(event: Event): Promise<void> {
-  const button = event.currentTarget as HTMLElement;
-  const postId = button.dataset.postId;
-  if (!postId) return;
-
+async function toggleComments(postId: number): Promise<void> {
   const commentsSection = document.getElementById(`comments-${postId}`);
   if (!commentsSection) return;
 
-  if (
-    commentsSection.style.display === "none" ||
-    !commentsSection.style.display
-  ) {
-    try {
-      const comments = await getPostComments(postId);
-      const commentsList = document.getElementById(`comments-list-${postId}`);
+  const isVisible = commentsSection.style.display !== "none";
 
-      if (commentsList) {
-        commentsList.innerHTML = comments.data
-          .map(
-            (comment) => `
-          <div class="comment-item">
-            <div class="comment-author">${comment.author.name}</div>
-            <div class="comment-text">${comment.body}</div>
-          </div>`
-          )
-          .join("");
-      }
-
-      commentsSection.style.display = "block";
-      button.classList.add("active");
-    } catch (error) {
-      console.error("Error loading comments:", error);
-    }
-  } else {
+  if (isVisible) {
     commentsSection.style.display = "none";
-    button.classList.remove("active");
+  } else {
+    commentsSection.style.display = "block";
+    await loadComments(postId);
   }
 }
 
-function handleViewPost(event: Event): void {
-  const button = event.currentTarget as HTMLElement;
-  const postId = button.dataset.postId;
-  console.log("View full post:", postId);
+async function loadComments(postId: number): Promise<void> {
+  const commentsList = document.getElementById(`comments-list-${postId}`);
+  if (!commentsList) return;
+
+  commentsList.innerHTML =
+    '<div class="loading-comments">Loading comments...</div>';
+
+  try {
+    const response = await getPostComments(postId.toString());
+    const comments = response.data;
+
+    if (comments.length === 0) {
+      commentsList.innerHTML =
+        '<div class="no-comments">No comments yet. Be the first to comment!</div>';
+      return;
+    }
+
+    commentsList.innerHTML = comments
+      .map(
+        (comment) => `
+      <div class="comment-item" data-comment-id="${comment.id}">
+        <div class="comment-avatar">
+          ${
+            comment.author.avatar?.url
+              ? `<img src="${comment.author.avatar.url}" alt="${comment.author.avatar.alt || comment.author.name}">`
+              : comment.author.name.charAt(0).toUpperCase()
+          }
+        </div>
+        <div class="comment-content">
+          <div class="comment-author">${comment.author.name}</div>
+          <div class="comment-text">${comment.body}</div>
+          <div class="comment-meta">
+            <span class="comment-time">${getTimeAgo(new Date(comment.created))}</span>
+            <button class="comment-reply-btn" onclick="replyToComment('${postId}', '${comment.id}')">Reply</button>
+          </div>
+        </div>
+      </div>
+    `
+      )
+      .join("");
+  } catch (error) {
+    console.error("Error loading comments:", error);
+    commentsList.innerHTML =
+      '<div class="comments-error">Failed to load comments. Please try again.</div>';
+  }
 }
 
-async function handleCommentSubmit(event: Event): Promise<void> {
-  const button = event.currentTarget as HTMLElement;
-  const postId = button.dataset.postId;
-  if (!postId) return;
-
-  const commentInput = document.getElementById(
+async function submitComment(postId: number): Promise<void> {
+  const input = document.getElementById(
     `comment-input-${postId}`
   ) as HTMLInputElement;
-  const commentText = commentInput?.value.trim();
-  if (!commentText) return;
+  const commentText = input?.value.trim();
+
+  if (!commentText) {
+    input.focus();
+    return;
+  }
+
+  const submitBtn = document.querySelector(
+    `[onclick="submitComment(${postId})"]`
+  ) as HTMLButtonElement;
 
   try {
-    button.style.opacity = "0.5";
-    (button as HTMLButtonElement).disabled = true;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML =
+      '<div style="width: 16px; height: 16px; border: 2px solid #fff; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>';
 
-    const response = await createComment(postId, commentText);
-    const newComment = response.data;
+    const response = await createComment(postId.toString(), commentText);
 
-    const commentsList = document.getElementById(`comments-list-${postId}`);
-    if (commentsList) {
-      const commentElement = document.createElement("div");
-      commentElement.className = "comment-item";
-      commentElement.innerHTML = `
-        <div class="comment-author">${newComment.author.name}</div>
-        <div class="comment-text">${newComment.body}</div>
-      `;
-      commentsList.appendChild(commentElement);
+    input.value = "";
+
+    // Refresh comments
+    await loadComments(postId);
+
+    // Update comment count in post card
+    const commentCountEl = document.querySelector(
+      `[data-post-id="${postId}"].comment-btn .action-count-compact`
+    );
+    if (commentCountEl) {
+      const currentCount = parseInt(commentCountEl.textContent || "0");
+      commentCountEl.textContent = (currentCount + 1).toString();
     }
 
-    // Clear input
-    commentInput.value = "";
+    showNotification("✅ Comment added!", "success");
   } catch (error) {
     console.error("Error creating comment:", error);
-    alert("Failed to post comment.");
+    alert("Failed to post comment. Please try again.");
   } finally {
-    button.style.opacity = "1";
-    (button as HTMLButtonElement).disabled = false;
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22,2 15,22 11,13 2,9 22,2"></polygon>
+      </svg>
+    `;
   }
 }
 
-async function handleReactionClick(event: Event): Promise<void> {
-  const button = event.currentTarget as HTMLElement;
-  const postId = button.dataset.postId;
-  const reaction = button.dataset.reaction;
-  if (!postId || !reaction) return;
+function replyToComment(postId: string, commentId: string): void {
+  const input = document.getElementById(
+    `comment-input-${postId}`
+  ) as HTMLInputElement;
+  const commentEl = document.querySelector(`[data-comment-id="${commentId}"]`);
+  const authorName = commentEl?.querySelector(".comment-author")?.textContent;
+
+  if (input && authorName) {
+    input.value = `@${authorName} `;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                          Reactions Functionality                           */
+/* -------------------------------------------------------------------------- */
+
+async function handleToggleReaction(
+  postId: number,
+  emoji: string
+): Promise<void> {
+  if (!isLoggedIn()) {
+    alert("Please log in to react to posts.");
+    return;
+  }
 
   try {
-    const wasAdded = await toggleReaction(postId, reaction);
+    const wasAdded = await toggleReaction(postId.toString(), emoji);
 
-    const likeButton = document.querySelector(
-      `[data-post-id="${postId}"].like-btn`
+    const reactionCount = document.querySelector(
+      `[data-post-id="${postId}"].like-btn .action-count-compact`
     );
-    const likeCount = likeButton?.querySelector(".action-count-compact");
-
-    if (likeCount) {
-      const currentCount = parseInt(likeCount.textContent || "0", 10);
-      likeCount.textContent = wasAdded
+    if (reactionCount) {
+      const currentCount = parseInt(reactionCount.textContent || "0");
+      reactionCount.textContent = wasAdded
         ? (currentCount + 1).toString()
         : Math.max(0, currentCount - 1).toString();
     }
 
-    hideReactionsModal(likeButton as HTMLElement);
+    const likeBtn = document.querySelector(
+      `[data-post-id="${postId}"].like-btn`
+    );
+    if (likeBtn) {
+      if (wasAdded) {
+        likeBtn.classList.add("reacted");
+      } else {
+        likeBtn.classList.remove("reacted");
+      }
+    }
   } catch (error) {
     console.error("Error toggling reaction:", error);
+    alert("Failed to react to post. Please try again.");
   }
 }
 
-function showReactionsModal(likeButton: HTMLElement): void {
-  const postC = likeButton.closest(".post-card");
-  if (!postC) return;
-  const postId = likeButton.dataset.postId;
-  const reactionsModal = document.getElementById(`reactions-${postId}`);
-  if (reactionsModal) reactionsModal.style.display = "block";
-}
+function selectReaction(postId: number, emoji: string): void {
+  handleToggleReaction(postId, emoji);
 
-function hideReactionsModal(likeButton: HTMLElement): void {
-  const postC = likeButton.closest(".post-card");
-  if (!postC) return;
-  const postId = likeButton.dataset.postId;
+  // Hide reactions modal
   const reactionsModal = document.getElementById(`reactions-${postId}`);
-  if (reactionsModal) reactionsModal.style.display = "none";
+  if (reactionsModal) {
+    reactionsModal.style.display = "none";
+  }
 }
 
 /* -------------------------------------------------------------------------- */
-/*                          Pagination & Search utils                         */
+/*                           Full Post View                                   */
 /* -------------------------------------------------------------------------- */
+
+function viewFullPost(postId: number): void {
+  const postElement = document.getElementById(`post-${postId}`);
+  if (!postElement) return;
+
+  const title =
+    postElement.querySelector(".post-title-compact")?.textContent || "";
+  const body = postElement.querySelector(".post-body")?.textContent || "";
+  const author =
+    postElement.querySelector(".author-name-compact")?.textContent || "";
+  const time =
+    postElement.querySelector(".post-time-compact")?.textContent || "";
+  const mediaImg = postElement.querySelector(
+    ".post-image-preview"
+  ) as HTMLImageElement;
+
+  const fullPostContent = document.getElementById("fullPostContent");
+  if (!fullPostContent) return;
+
+  fullPostContent.innerHTML = `
+    <div class="full-post-view">
+      <div class="full-post-header">
+        <div class="author-info">
+          <div class="author-avatar">
+            ${author.charAt(0).toUpperCase()}
+          </div>
+          <div class="author-details">
+            <h4 class="author-name">${author}</h4>
+            <p class="post-time">${time}</p>
+          </div>
+        </div>
+      </div>
+      
+      ${
+        mediaImg
+          ? `
+        <div class="full-post-media">
+          <img src="${mediaImg.src}" alt="${mediaImg.alt}" style="width: 100%; border-radius: 8px; margin: 1rem 0;">
+        </div>
+      `
+          : ""
+      }
+      
+      <div class="full-post-content">
+        ${title ? `<h2>${title}</h2>` : ""}
+        <div class="post-text">${body}</div>
+      </div>
+      
+      <div class="full-post-actions">
+        <button class="btn btn-secondary" onclick="toggleComments(${postId}); closeFullPostModal();">
+          View Comments
+        </button>
+      </div>
+    </div>
+  `;
+
+  const modal = document.getElementById("fullPostModal");
+  if (modal) {
+    modal.style.display = "flex";
+  }
+}
+
+function closeFullPostModal(): void {
+  const modal = document.getElementById("fullPostModal");
+  if (modal) {
+    modal.style.display = "none";
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                          Utility Functions                                */
+/* -------------------------------------------------------------------------- */
+
+function showNotification(
+  message: string,
+  type: "success" | "error" | "info" = "info"
+): void {
+  const notification = document.createElement("div");
+  notification.className = `notification ${type}-notification`;
+  notification.innerHTML = `
+    <div class="notification-content">
+      ${message}
+    </div>
+  `;
+  notification.style.cssText = `
+    position: fixed;
+    top: 90px;
+    right: 20px;
+    z-index: 10000;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    color: white;
+    font-weight: 500;
+    animation: slideInFromRight 0.3s ease-out;
+    ${type === "success" ? "background: var(--success-color);" : ""}
+    ${type === "error" ? "background: var(--danger-color);" : ""}
+    ${type === "info" ? "background: var(--primary-color);" : ""}
+  `;
+
+  document.body.appendChild(notification);
+
+  setTimeout(() => {
+    notification.style.animation = "slideOutToRight 0.3s ease-out forwards";
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 3000);
+}
+
+function getTimeAgo(date: Date): string {
+  const now = new Date();
+  const diffInMs = now.getTime() - date.getTime();
+  const diffInSeconds = Math.floor(diffInMs / 1000);
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  const diffInDays = Math.floor(diffInHours / 24);
+
+  if (diffInSeconds < 60) return "Just now";
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+  if (diffInHours < 24) return `${diffInHours}h ago`;
+  if (diffInDays < 7) return `${diffInDays}d ago`;
+  return date.toLocaleDateString();
+}
 
 function renderPaginationControls(meta: any): string {
   if (!meta || meta.pageCount <= 1) return "";
