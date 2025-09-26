@@ -1,6 +1,6 @@
 /**
  * Enhanced FeedPage with full CRUD, Comments, and Reactions functionality
- * @file Enhanced FeedPage.ts
+ * @file Enhanced FeedPage.ts - COMPLETE VERSION
  */
 
 import postCard from "../components/postCard";
@@ -20,6 +20,7 @@ import {
 } from "../services/interactions/interactions";
 import { renderRoute } from "../router";
 import { isLoggedIn } from "../utils/auth";
+import { getLocalItem } from "../utils/storage";
 
 export default async function FeedPage(): Promise<string> {
   try {
@@ -165,13 +166,13 @@ ${
                       "Try searching with different keywords"
                     )
                   : renderEmptyState(
-                      "📭",
+                      "🔭",
                       "No posts available",
                       isUserLoggedIn
                         ? "Start following people to see their posts!"
                         : "No posts to display at the moment. Try refreshing the page.",
                       !isUserLoggedIn
-                        ? `<button class="btn btn-primary" onclick="window.location.href='/'" style="margin-top: 1rem;">🔑 Sign In for More Content</button>`
+                        ? `<button class="btn btn-primary" onclick="window.location.href='/'" style="margin-top: 1rem;">🔐 Sign In for More Content</button>`
                         : ""
                     )
             }
@@ -306,7 +307,6 @@ function initializeFeedInteractions(): void {
       postBox.classList.add("collapsed");
       expandedFields.style.display = "none";
       collapsedInput.style.display = "block";
-      // Reset form
       createForm?.reset();
     });
   }
@@ -319,7 +319,17 @@ function initializeFeedInteractions(): void {
     editForm.addEventListener("submit", handleEditPost);
   }
 
-  // Make functions globally available
+  // Enhanced: Close dropdowns when clicking outside
+  document.addEventListener("click", function (e) {
+    const target = e.target as Element;
+    if (!target.closest(".dropdown")) {
+      document.querySelectorAll(".post-menu.show").forEach((menu) => {
+        menu.classList.remove("show");
+      });
+    }
+  });
+
+  // Make ALL functions globally available
   (window as any).togglePostMenu = togglePostMenu;
   (window as any).editPost = editPostFunction;
   (window as any).deletePost = deletePostFunction;
@@ -330,6 +340,8 @@ function initializeFeedInteractions(): void {
   (window as any).viewFullPost = viewFullPost;
   (window as any).closeEditModal = closeEditModal;
   (window as any).closeFullPostModal = closeFullPostModal;
+  (window as any).showReactionsModal = showReactionsModal;
+  (window as any).hideReactionsModal = hideReactionsModal;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -800,6 +812,28 @@ function selectReaction(postId: number, emoji: string): void {
   }
 }
 
+/**
+ * Show reactions modal on hover
+ */
+function showReactionsModal(postId: number): void {
+  const modal = document.getElementById(`reactions-${postId}`);
+  if (modal) {
+    modal.style.display = "block";
+  }
+}
+
+/**
+ * Hide reactions modal when not hovering
+ */
+function hideReactionsModal(postId: number): void {
+  setTimeout(() => {
+    const modal = document.getElementById(`reactions-${postId}`);
+    if (modal && !modal.matches(":hover")) {
+      modal.style.display = "none";
+    }
+  }, 200);
+}
+
 /* -------------------------------------------------------------------------- */
 /*                           Full Post View                                   */
 /* -------------------------------------------------------------------------- */
@@ -963,6 +997,48 @@ function renderPaginationControls(meta: any): string {
   `;
 }
 
+/* -------------------------------------------------------------------------- */
+/*                            DEBUGGING HELPERS                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Debug function to check if all required functions are available
+ */
+function debugPostInteractions(): void {
+  const requiredFunctions = [
+    "togglePostMenu",
+    "editPost",
+    "deletePost",
+    "toggleComments",
+    "submitComment",
+    "toggleReaction",
+    "selectReaction",
+    "viewFullPost",
+    "showReactionsModal",
+    "hideReactionsModal",
+  ];
+
+  console.log("🔍 Checking post interaction functions:");
+  requiredFunctions.forEach((funcName) => {
+    const exists = typeof (window as any)[funcName] === "function";
+    console.log(
+      `${exists ? "✅" : "❌"} ${funcName}: ${exists ? "Available" : "Missing"}`
+    );
+  });
+
+  // Check if posts exist in DOM
+  const postCards = document.querySelectorAll("[data-post-id]");
+  console.log(`📝 Found ${postCards.length} post cards in DOM`);
+
+  // Check if user is logged in
+  const currentUser = getLocalItem("user");
+  console.log(`👤 Current user: ${currentUser || "Not logged in"}`);
+}
+
+// Make debug function available globally
+(window as any).debugPostInteractions = debugPostInteractions;
+
+// Global navigation functions
 (window as any).navigateToPage = function (page: number) {
   const url = new URL(window.location.href);
   url.searchParams.set("page", page.toString());
