@@ -12,6 +12,17 @@ import {
   type NoroffPost,
 } from '../services/posts/posts';
 
+// Add the global window interface to actually USE the NoroffPost type
+declare global {
+  interface Window {
+    searchQuery?: string;
+    searchResults?: NoroffPost[]; // This uses the imported type
+    userResults?: any[];
+    navigateToProfile?: (username: string) => void;
+    navigateToPage?: (page: number) => void;
+  }
+}
+
 // TypeScript interfaces and types for NavbarPage
 export interface NavbarElements {
   feedBtn: HTMLElement | null;
@@ -48,6 +59,11 @@ export interface NotificationConfig {
 export type NavbarEventHandler = (event: Event) => void;
 export type NavigationRoute = '/' | '/feed' | '/profile' | '/register';
 export type NavbarTheme = 'light' | 'dark' | 'auto';
+
+interface SearchResult {
+  type: 'post' | 'user';
+  data: NoroffPost | any; // Use NoroffPost here too
+}
 
 export default function NavbarPage() {
   const userLoggedIn = isLoggedIn();
@@ -133,9 +149,52 @@ export default function NavbarPage() {
 }
 
 /**
- * Initialize navbar functionality
- * Sets up event listeners for navigation and search
+ * Enhanced search function - now properly typed
  */
+async function enhancedSearch(query: string): Promise<SearchResult[]> {
+  const results: SearchResult[] = [];
+
+  try {
+    // Search for posts
+    const postsResponse = await getAllPosts(50, 1);
+    const matchingPosts: NoroffPost[] = postsResponse.data.filter(
+      (post: NoroffPost) =>
+        post.title.toLowerCase().includes(query.toLowerCase()) ||
+        post.body.toLowerCase().includes(query.toLowerCase()) ||
+        post.author.name.toLowerCase().includes(query.toLowerCase())
+    );
+
+    // Add unique users from matching posts
+    const uniqueUsers = new Map();
+    matchingPosts.forEach((post: NoroffPost) => {
+      if (post.author.name.toLowerCase().includes(query.toLowerCase())) {
+        uniqueUsers.set(post.author.name, post.author);
+      }
+    });
+
+    // Add user results
+    uniqueUsers.forEach((user) => {
+      results.push({
+        type: 'user',
+        data: user,
+      });
+    });
+
+    // Add post results
+    matchingPosts.forEach((post: NoroffPost) => {
+      results.push({
+        type: 'post',
+        data: post,
+      });
+    });
+  } catch (error) {
+    console.error('Search error:', error);
+  }
+
+  return results;
+}
+
+// Rest of the file remains exactly the same...
 export function initNavbar() {
   // Navigation event listeners
   const feedBtn = document.getElementById('nav-feed');
@@ -200,23 +259,19 @@ export function initNavbar() {
 
   // Enhanced Search functionality
   if (searchBtn && searchInput) {
-    let allPosts: NoroffPost[] = [];
-
     // Load posts for search functionality
     const loadPostsForSearch = async () => {
       try {
-        let postsResponse;
         if (isLoggedIn()) {
           // Authenticated users get personalized posts
-          postsResponse = await getAllPosts(100, 1);
+          await getAllPosts(100, 1);
         } else {
           // Unauthenticated users get public posts
-          postsResponse = await getPublicPosts(100, 1);
+          await getPublicPosts(100, 1);
         }
-        allPosts = postsResponse.data;
+        // We don't need to store posts here since enhancedSearch makes its own API calls
       } catch (error) {
         console.error('Error loading posts for search:', error);
-        allPosts = [];
       }
     };
 
@@ -224,7 +279,7 @@ export function initNavbar() {
     loadPostsForSearch();
 
     // Enhanced search input handler
-    const handleSearchInput = (e: Event) => {
+    const handleSearchInput = async (e: Event) => {
       const target = e.target as HTMLInputElement;
       const searchTerm = target.value.toLowerCase().trim();
 
@@ -237,19 +292,19 @@ export function initNavbar() {
         return;
       }
 
-      // Filter posts by content and author name
-      const filteredPosts = allPosts.filter(
-        (post) =>
-          post.body.toLowerCase().includes(searchTerm) ||
-          post.title.toLowerCase().includes(searchTerm) ||
-          post.author.name.toLowerCase().includes(searchTerm)
-      );
+      // Use enhanced search
+      const searchResults = await enhancedSearch(searchTerm);
 
-      // Store search results globally for FeedPage to use
+      // Separate users and posts
+      const userResults = searchResults.filter((r) => r.type === 'user');
+      const postResults = searchResults.filter((r) => r.type === 'post');
+
+      // Store results globally
       (window as any).searchQuery = searchTerm;
-      (window as any).searchResults = filteredPosts;
+      (window as any).searchResults = postResults.map((r) => r.data);
+      (window as any).userResults = userResults.map((r) => r.data);
 
-      // Navigate to feed to show search results
+      // Navigate to feed to show results
       if (window.location.pathname !== '/feed') {
         history.pushState({ path: '/feed' }, '', '/feed');
       }
@@ -296,9 +351,6 @@ export function initNavbar() {
   (window as any).updateNavbarAfterLogout = updateNavbarAfterLogout;
 }
 
-/**
- * Setup enhanced global event listeners for keyboard shortcuts and interactions
- */
 function setupGlobalEventListeners(searchInput: HTMLInputElement | null) {
   // Enhanced Event Listeners
   document.addEventListener('click', function (e) {
@@ -377,9 +429,6 @@ function setupGlobalEventListeners(searchInput: HTMLInputElement | null) {
   });
 }
 
-/**
- * Update active navigation button based on current path
- */
 function updateActiveNav() {
   const currentPath = window.location.pathname;
   const navButtons = document.querySelectorAll('.nav-btn');
@@ -397,10 +446,6 @@ function updateActiveNav() {
   }
 }
 
-/**
- * Update navbar after user logs out
- * Replaces logout button with login button
- */
 function updateNavbarAfterLogout() {
   const navContainer = document.querySelector('.navbar-nav');
   if (navContainer) {
@@ -419,9 +464,6 @@ function updateNavbarAfterLogout() {
   }
 }
 
-/**
- * Show logout success message
- */
 function showLogoutMessage() {
   // Create temporary notification
   const notification = document.createElement('div');
